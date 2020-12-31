@@ -73,9 +73,7 @@ def emailNotifications():
     for post in notifiablePosts:
         emailBody += f"{post['title'][0: 20 if len(post['title']) < 20 else len(post['title'])]}:{post['url']} in {post['subreddit']} \n"
         htmlBody += f"<li><a href={post['url']}>{post['title'][0: 20 if len(post['title']) < 20 else len(post['title'])]} in {post['subreddit']} \n"
-    htmlBody += "<\\ul>"
 
-    # Create the plain-text and HTML version of your message
     text = f"""\
     This is a notification from reddit-notifier to let you know about new posts from chosen subreddits
 
@@ -91,12 +89,9 @@ def emailNotifications():
     </html>
     """
 
-    # Turn these into plain/html MIMEText objects
     part1 = MIMEText(text, "plain")
     part2 = MIMEText(html, "html")
 
-    # Add HTML/plain-text parts to MIMEMultipart message
-    # The email client will try to render the last part first
     message.attach(part1)
     message.attach(part2)
     context = ssl.create_default_context()
