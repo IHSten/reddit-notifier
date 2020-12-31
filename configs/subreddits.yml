@@ -1,0 +1,12 @@
+# This file contains the list of subreddits to check and the keywords required for each
+# Some examples have been set below but it can be customized as desired
+# Nothing is case-sensitive.
+subreddits:
+  - name: 'aww'
+    keywords:  
+      - 'sloth'
+      - 'kitten'
+      - 'puppy'
+  - name: 'ProgrammerHumor'
+    keywords: 
+      - 'javascript'
