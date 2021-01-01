@@ -6,6 +6,7 @@ import logging
 import smtplib
 import ssl
 import yaml
+import inspect, os.path
 
 from utils.dbinterface import DBInterface
 from utils.subreddit import Subreddit
@@ -13,23 +14,27 @@ from utils.subreddit import Subreddit
 subreddits = []
 senderEmail = dict()
 recipientEmails = []
-db = DBInterface('posts.db')
+
+filename = inspect.getframeinfo(inspect.currentframe()).filename
+path = os.path.dirname(os.path.abspath(filename))
+db = DBInterface(os.path.join(path, 'posts.db'))
+
 
 def initializeLogging():
-    logging.basicConfig(filename="notifier.log", level=logging.INFO, format='%(levelname)s : %(asctime)s - %(message)s')
+    logging.basicConfig(filename=os.path.join(path, "notifier.log"), level=logging.INFO, format='%(levelname)s : %(asctime)s - %(message)s')
     logging.info("Logger initialized")
     return
 
 def readConfigs():
     logging.debug("Reading configs")
     subredditImport = []
-    with open('./configs/subreddits.yml', 'r') as f:
+    with open(os.path.join(path, 'configs/subreddits.yml'), 'r') as f:
         subredditImport = yaml.safe_load(f)['subreddits']
 
     for i, sub in enumerate(subredditImport):
         subreddits.append(Subreddit(sub))
 
-    with open('./configs/email.yml', 'r') as f:
+    with open(os.path.join(path, 'configs/email.yml'), 'r') as f:
         emailConfig = yaml.safe_load(f)
         recipientEmails.extend(emailConfig['to'])
         senderEmail.update(emailConfig['from'])
