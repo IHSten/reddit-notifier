@@ -76,7 +76,7 @@ def constructMessages():
         raise SystemExit("db insert operation failed")
     
     for p in notifiablePosts:
-        messages.insert(0, f"New post {p['title']} detected.")
+        messages.insert(0, f"**{p['subreddit']}** \n\n[{p['title']}]({p['url']})")
 
     return messages
 

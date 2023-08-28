@@ -63,7 +63,7 @@ class DBInterface:
         for sub in subreddits:
             try:
                 cur = conn.cursor()
-                cur.execute(f'''SELECT title FROM posts WHERE subreddit="{sub.name}"''')
+                cur.execute(f'''SELECT title FROM posts WHERE subreddit = ?''', (f"{sub.name}",))
 
                 titleList = cur.fetchall()
 
@@ -90,13 +90,7 @@ class DBInterface:
             # titles are unique in the database, so an IntegrityError will occur if a title is duplicated
             try:
                 conn.execute(f'''INSERT INTO posts (title,date,subreddit,url)
-                                VALUES(
-                                    "{post['title']}", 
-                                    "{datetime.today().strftime('%Y-%m-%d')}",
-                                    "{post['subreddit']}",
-                                    "{post['url']}"
-                                );'''
-                            )
+                                VALUES(?, ?, ?, ?);''', (post['title'], datetime.today().strftime('%Y-%m-%d'), post['subreddit'], post['url']))
                 conn.commit()
             except sqlite3.IntegrityError as ie:
                 log.warning("Duplicate post attempted to be added to database.")
