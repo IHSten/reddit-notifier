@@ -1,24 +1,25 @@
 #!/usr/bin/python3
 
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import discord
 import logging
-import smtplib
-import ssl
 import yaml
 import inspect, os.path
+import asyncio
+import dotenv
+import os
 
 from utils.dbinterface import DBInterface
 from utils.subreddit import Subreddit
 
 subreddits = []
-senderEmail = dict()
-recipientEmails = []
 
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
-db = DBInterface(os.path.join(path, 'posts.db'))
+discordToken = ""
+discordChannel = ""
 
+db = DBInterface(os.path.join(path, 'posts.db'))
+client = discord.Client(intents = discord.Intents.default())
 
 def initializeLogging():
     logging.basicConfig(filename=os.path.join(path, "notifier.log"), level=logging.INFO, format='%(levelname)s : %(asctime)s - %(message)s')
@@ -26,6 +27,7 @@ def initializeLogging():
     return
 
 def readConfigs():
+    dotenv.load_dotenv()
     logging.debug("Reading configs")
     subredditImport = []
     with open(os.path.join(path, 'configs/subreddits.yml'), 'r') as f:
@@ -34,83 +36,67 @@ def readConfigs():
     for i, sub in enumerate(subredditImport):
         subreddits.append(Subreddit(sub))
 
-    with open(os.path.join(path, 'configs/email.yml'), 'r') as f:
-        emailConfig = yaml.safe_load(f)
-        recipientEmails.extend(emailConfig['to'])
-        senderEmail.update(emailConfig['from'])
+    global discordToken
+    discordToken = os.getenv('DISCORD_TOKEN')
+    if not discordToken:
+        logging.error(f"No Discord token provided. Exiting...")
+        quit()
     
-    logging.info(f"Finished reading configs. Acquired {len(subreddits)} subreddits and will notify {len(recipientEmails)} recipientEmails.")
+    global discordChannel
+    discordChannel = os.getenv('DISCORD_CHANNEL')
+    try:
+        discordChannel = int(discordChannel)
+    except:
+        logging.error(f"No valid Discord channel ID provided. Exiting...")
+        quit()
+
+    logging.info(f"Finished reading configs. Acquired {len(subreddits)} subreddits.")
     return
 
 def fetchSubPosts():
     for sub in subreddits:
         sub.getNewPosts()
         sub.filterPosts()
-    
     return
 
-def emailNotifications():
+def constructMessages():
+    messages = []
     # check post titles against db
     notifiablePosts = db.checkPosts(subreddits)
     newPosts = len(notifiablePosts)
     logging.info(f"Found {newPosts} new posts to notify users about")
     
     if newPosts <= 0:
-        return
+        return messages
     
     # insert new posts into db
     insertOperation = db.insertPosts(notifiablePosts)
-
     if not insertOperation:
         logging.error("Error inserting new posts into db failed.")
-        logging.error("Raise an issue for this")
         raise SystemExit("db insert operation failed")
     
-    # notifiablePosts contains the lists of posts to send to users
+    for p in notifiablePosts:
+        messages.insert(0, f"New post {p['title']} detected.")
 
-    message = MIMEMultipart("alternative")
-    message["Subject"] = f"reddit-notifier has found {len(notifiablePosts)} deals"
-    message["From"] = senderEmail['email']
-    message["To"] = ','.join(recipientEmails)
+    return messages
 
-    emailBody = ""
-    htmlBody = "<ul>\n"
-    for post in notifiablePosts:
-        emailBody += f"{post['title'][0: 20 if len(post['title']) < 20 else len(post['title'])]}:{post['url']} in {post['subreddit']} \n"
-        htmlBody += f"<li><a href={post['url']}>{post['title'][0: 20 if len(post['title']) < 20 else len(post['title'])]} in {post['subreddit']} \n"
+def notifyDiscord():
+    client.run(discordToken)
 
-    text = f"""\
-    This is a notification from reddit-notifier to let you know about new posts from chosen subreddits
+async def sendMessage(message):
+    channel = client.get_channel(discordChannel)
+    await channel.send(message)
+@client.event
+async def on_ready():  #  Called when internal cache is loaded - we only want to send one message, so just do this here
+    counter = 0
+    for m in constructMessages():
+        counter += 1
+        await sendMessage(m)
+    os._exit(0)
 
-    {emailBody}"""
-
-    html = f"""\
-    <html>
-        <body>
-            This is a notification from reddit-notifier to let you know about new posts from chosen subreddits
-            
-            {htmlBody}
-        </body>
-    </html>
-    """
-
-    part1 = MIMEText(text, "plain")
-    part2 = MIMEText(html, "html")
-
-    message.attach(part1)
-    message.attach(part2)
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
-        server.login(senderEmail['email'], senderEmail['password'])
-        recipients = ','.join(recipientEmails)
-        server.sendmail(senderEmail['email'], recipients, message.as_string())
-
-def main():
+if __name__ == '__main__':
     initializeLogging()
     db.initializeDB()
     readConfigs()
     fetchSubPosts()
-    emailNotifications()
-
-if __name__ == '__main__':
-    main()
+    notifyDiscord()
